@@ -1,0 +1,18 @@
+Import fuzzyfind
+
+Sub Main()
+    Dim files As Array Of String = ["src/main.bui", "tests/main_test.bui", "src/menus.bui", "docs/manual.md"]
+    For Each matched As FuzzyMatch In Rank("mn", files, 3, True)
+        Dim highlight As String = ""
+        Dim chars As Array Of String = String.Chars(matched.CandidateText)
+        Dim positions As Array Of Integer = matched.Positions
+        For i As Integer = 0 To Array.Count(chars) - 1
+            If Array.Contains(positions, i) Then
+                highlight += "[" + chars(i) + "]"
+            Else
+                highlight += chars(i)
+            End If
+        Next
+        Print String.From(matched.Score) + " " + highlight
+    Next
+End Sub

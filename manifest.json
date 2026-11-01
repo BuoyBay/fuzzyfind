@@ -1,0 +1,6 @@
+{
+  "schema": 1,
+  "name": "fuzzyfind",
+  "version": "0.1.0",
+  "description": "Unicode subsequence matching, ranked quick-open results and highlight positions for command palettes"
+}

@@ -1,0 +1,229 @@
+' All highlight positions are zero-based Unicode codepoint indexes.
+Const Unreachable As Integer = -1000000000000
+Const MaxQueryCharacters As Integer = 128
+Const MaxCandidateCharacters As Integer = 4096
+Const MaxMatchCells As Integer = 262144
+Const MaxRankCells As Integer = 32000000
+Const MaxCandidates As Integer = 20000
+
+''' An immutable match result. CandidateIndex refers to the input array in Rank.
+Public Class FuzzyMatch
+    Private Property mText As String
+    Private Property mMatched As Boolean
+    Private Property mScore As Integer
+    Private Property mPositions As Array Of Integer
+    Private Property mIndex As Integer
+
+    Internal Sub Constructor(candidateText As String, matched As Boolean, score As Integer, positions As Array Of Integer, candidateIndex As Integer)
+        Me.mText = candidateText
+        Me.mMatched = matched
+        Me.mScore = score
+        Me.mPositions = Array.Clone(positions)
+        Me.mIndex = candidateIndex
+    End Sub
+
+    Public Property CandidateText As String
+        Get
+            Return Me.mText
+        End Get
+    End Property
+
+    Public Property IsMatch As Boolean
+        Get
+            Return Me.mMatched
+        End Get
+    End Property
+
+    Public Property Score As Integer
+        Get
+            Return Me.mScore
+        End Get
+    End Property
+
+    Public Property CandidateIndex As Integer
+        Get
+            Return Me.mIndex
+        End Get
+    End Property
+
+    Public Property Positions As Array Of Integer
+        Get
+            Return Array.Clone(Me.mPositions)
+        End Get
+    End Property
+End Class
+
+Private Function IsSeparator(ch As String) As Boolean
+    Return ch = "/" Or ch = "\\" Or ch = "_" Or ch = "-" Or ch = " " Or ch = "." Or ch = ":" Or ch = "\t"
+End Function
+
+Private Function FoldCharacter(ch As String, pathMode As Boolean) As String
+    If pathMode And ch = "\\" Then Return "/"
+    Return String.LCase(ch)
+End Function
+
+Private Function CharacterBonus(chars As Array Of String, index As Integer, basenameStart As Integer, pathMode As Boolean) As Integer
+    Dim bonus As Integer = 16
+    If index = 0 Then
+        bonus += 12
+    ElseIf IsSeparator(chars(index - 1)) Then
+        bonus += 12
+    Else
+        Dim previousCode As Integer = String.Asc(chars(index - 1))
+        Dim currentCode As Integer = String.Asc(chars(index))
+        If previousCode >= 97 And previousCode <= 122 And currentCode >= 65 And currentCode <= 90 Then bonus += 10
+    End If
+    If pathMode And index >= basenameStart Then bonus += 8
+    Return bonus
+End Function
+
+Private Sub ValidateLengths(queryCount As Integer, candidateCount As Integer)
+    If queryCount > MaxQueryCharacters Then Throw New InvalidArgumentException("Fuzzy query exceeds 128 codepoints")
+    If candidateCount > MaxCandidateCharacters Then Throw New InvalidArgumentException("Fuzzy candidate exceeds 4096 codepoints")
+    If queryCount * candidateCount > MaxMatchCells Then Throw New InvalidArgumentException("Fuzzy match exceeds 262144 cells")
+End Sub
+
+Private Function MatchCharacters(queryChars As Array Of String, candidateText As String, pathMode As Boolean, candidateIndex As Integer) As FuzzyMatch
+    Dim queryCount As Integer = Array.Count(queryChars)
+    Dim candidateCount As Integer = String.Len(candidateText)
+    ValidateLengths(queryCount, candidateCount)
+    Dim positions As Array Of Integer = []
+    If queryCount = 0 Then Return New FuzzyMatch(candidateText, True, 0, positions, candidateIndex)
+    If queryCount > candidateCount Then Return New FuzzyMatch(candidateText, False, Unreachable, positions, candidateIndex)
+    Dim chars As Array Of String = String.Chars(candidateText)
+
+    Dim basenameStart As Integer = 0
+    If pathMode Then
+        For i As Integer = 0 To candidateCount - 1
+            If chars(i) = "/" Or chars(i) = "\\" Then basenameStart = i + 1
+        Next
+    End If
+    Dim folded As Array Of String = []
+    Dim bonuses As Array Of Integer = []
+    For i As Integer = 0 To candidateCount - 1
+        Array.Append(folded, FoldCharacter(chars(i), pathMode))
+        Array.Append(bonuses, CharacterBonus(chars, i, basenameStart, pathMode))
+    Next
+
+    Dim previous As Array Of Integer = []
+    Dim current As Array Of Integer = []
+    Array.ResizeTo(previous, candidateCount)
+    Array.ResizeTo(current, candidateCount)
+    Dim predecessors As Array Of Integer = []
+    Array.ResizeTo(predecessors, queryCount * candidateCount)
+    For i As Integer = 0 To candidateCount - 1
+        previous(i) = Unreachable
+    Next
+
+    For q As Integer = 0 To queryCount - 1
+        Dim needle As String = FoldCharacter(queryChars(q), pathMode)
+        Dim bestGapScore As Integer = Unreachable
+        Dim bestGapIndex As Integer = -1
+        For i As Integer = 0 To candidateCount - 1
+            current(i) = Unreachable
+            predecessors(q * candidateCount + i) = -1
+            ' Prefix maximum makes each DP row linear, rather than quadratic.
+            If q > 0 And i >= 2 Then
+                Dim gapIndex As Integer = i - 2
+                If previous(gapIndex) <> Unreachable Then
+                    Dim gapScore As Integer = previous(gapIndex) + gapIndex
+                    If gapScore > bestGapScore Then
+                        bestGapScore = gapScore
+                        bestGapIndex = gapIndex
+                    End If
+                End If
+            End If
+            If String.Compare(needle, folded(i), True) <> 0 Then Continue For
+            Dim predecessor As Integer = -1
+            Dim leadingScore As Integer = Unreachable
+            If q = 0 Then
+                leadingScore = -i
+            Else
+                If bestGapIndex >= 0 Then
+                    leadingScore = bestGapScore - i + 1
+                    predecessor = bestGapIndex
+                End If
+                If i > 0 And previous(i - 1) <> Unreachable Then
+                    Dim contiguousScore As Integer = previous(i - 1) + 18
+                    If contiguousScore > leadingScore Then
+                        leadingScore = contiguousScore
+                        predecessor = i - 1
+                    End If
+                End If
+            End If
+            If leadingScore = Unreachable Then Continue For
+            Dim bonus As Integer = bonuses(i)
+            If String.Compare(queryChars(q), chars(i), True) = 0 Then bonus += 1
+            current(i) = leadingScore + bonus
+            predecessors(q * candidateCount + i) = predecessor
+        Next
+        Dim swap As Array Of Integer = previous
+        previous = current
+        current = swap
+    Next
+
+    Dim bestScore As Integer = Unreachable
+    Dim bestIndex As Integer = -1
+    For i As Integer = 0 To candidateCount - 1
+        If previous(i) = Unreachable Then Continue For
+        Dim finalScore As Integer = previous(i) - (candidateCount - i - 1)
+        If finalScore > bestScore Then
+            bestScore = finalScore
+            bestIndex = i
+        End If
+    Next
+    If bestIndex < 0 Then Return New FuzzyMatch(candidateText, False, Unreachable, positions, candidateIndex)
+    Array.ResizeTo(positions, queryCount)
+    Dim cursor As Integer = bestIndex
+    For q As Integer = queryCount - 1 To 0 Step -1
+        positions(q) = cursor
+        cursor = predecessors(q * candidateCount + cursor)
+    Next
+    Return New FuzzyMatch(candidateText, True, bestScore, positions, candidateIndex)
+End Function
+
+''' Find the best ordered subsequence alignment; unmatched input returns IsMatch=False.
+Public Function Match(queryText As String, candidateText As String, pathMode As Boolean = False) As FuzzyMatch
+    ValidateLengths(String.Len(queryText), String.Len(candidateText))
+    Return MatchCharacters(String.Chars(queryText), candidateText, pathMode, -1)
+End Function
+
+''' Return highest scoring candidates. Equal scores retain input order; no input is mutated.
+Public Function Rank(queryText As String, candidates As Array Of String, limit As Integer = 20, pathMode As Boolean = False) As Array Of FuzzyMatch
+    If limit < 0 Or limit > 500 Then Throw New InvalidArgumentException("Fuzzy rank limit must be between 0 and 500")
+    If Array.Count(candidates) > MaxCandidates Then Throw New InvalidArgumentException("Fuzzy rank exceeds 20000 candidates")
+    Dim queryCount As Integer = String.Len(queryText)
+    ValidateLengths(queryCount, 0)
+    Dim queryChars As Array Of String = String.Chars(queryText)
+    Dim ranked As Array Of FuzzyMatch = []
+    If limit = 0 Then Return ranked
+    Dim work As Integer = 0
+    ' Validate all input before doing expensive scoring, including candidates that will not match.
+    For Each candidateText As String In candidates
+        Dim candidateCount As Integer = String.Len(candidateText)
+        ValidateLengths(queryCount, candidateCount)
+        work += queryCount * candidateCount
+        If work > MaxRankCells Then Throw New InvalidArgumentException("Fuzzy rank exceeds 32000000 cells; prefilter the candidate set")
+    Next
+    For i As Integer = 0 To Array.Count(candidates) - 1
+        Dim matched As FuzzyMatch = MatchCharacters(queryChars, candidates(i), pathMode, i)
+        If Not matched.IsMatch Then Continue For
+        Dim insertAt As Integer = Array.Count(ranked)
+        ' Binary insertion puts equal scores after earlier input candidates.
+        Dim low As Integer = 0
+        Dim high As Integer = Array.Count(ranked)
+        While low < high
+            Dim middle As Integer = (low + high) \ 2
+            If matched.Score > ranked(middle).Score Then
+                high = middle
+            Else
+                low = middle + 1
+            End If
+        End While
+        insertAt = low
+        If insertAt >= limit Then Continue For
+        Array.Insert(ranked, insertAt, matched)
+        If Array.Count(ranked) > limit Then Array.RemoveAt(ranked, Array.Count(ranked) - 1)
+    Next
+    Return ranked
+End Function
