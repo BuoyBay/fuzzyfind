@@ -29,8 +29,6 @@ An immutable match result. CandidateIndex refers to the input array in Rank.
 | `CandidateIndex` | `Integer` | Yes | No | — | — |
 | `Positions` | `Array Of Integer` | Yes | No | — | — |
 
-## FuzzyFind functions
-
 ### Match
 
 `Public Function Match(queryText As String, candidateText As String, pathMode As Boolean = False) As FuzzyMatch`

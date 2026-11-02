@@ -22,8 +22,7 @@ zero-based **Unicode codepoint** indexes into the original candidate string.
 They are neither UTF-8 byte offsets, UTF-16 units, nor grapheme-cluster indexes.
 
 See [the runnable demo](../examples/fuzzyfind_demo.bui) for highlighted quick-open
-results. The integration tests cover matching,
-ranking, Unicode, ownership of highlight arrays, and input limits.
+results.
 
 ## Matching behavior
 
@@ -63,9 +62,3 @@ For larger workspaces, prefilter or partition candidates before ranking. A resul
 limit of zero returns immediately after validating the query and candidate count;
 it does not inspect individual candidate strings. Inputs must be valid Buoy
 strings. Embedded NUL behavior follows Buoy's string implementation.
-
-## Verification
-
-
-Maintainers run the private validation suite before release. See the repository README for public build instructions.
-

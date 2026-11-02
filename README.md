@@ -1,6 +1,6 @@
 # Rank Unicode subsequence matches for quick-open interfaces
 
-Pure Buoy matching for an IDE's command palette, quick-open list or symbol picker.
+Source-only matching for an IDE's command palette, quick-open list or symbol picker.
 It scores ordered subsequences, returns the best alignment's highlight positions,
 and ranks candidates without changing their input order or contents.
 
@@ -20,7 +20,7 @@ consumer project for reproducible installs.
 
 ## Example
 
-```buoy
+```basic
 Import fuzzyfind
 
 Sub Main()
@@ -55,7 +55,6 @@ On your own machine, install Buoy and run:
 buoy ai init --both
 ```
 
-The generated agent files and editor settings stay local and are ignored by Git.
 
 ## Contributing
 

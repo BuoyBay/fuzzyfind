@@ -33,5 +33,4 @@ No candidate list is modified. Inputs must be valid Buoy strings; embedded NUL b
 
 [Getting started](getting-started.md) · [Package overview](index.md)
 
-
 [Full typed API: properties, parameters, defaults, and returns](typed-api.md)

@@ -15,7 +15,7 @@ Copy `fuzzyfind-0.1.0.buipkg` into `packages/` and import `fuzzyfind`.
 
 Keep metadata in a parallel array or map. `CandidateIndex` refers to the original candidate list even after results have been sorted.
 
-```buoy
+```basic
 Import fuzzyfind
 
 Sub Main()
