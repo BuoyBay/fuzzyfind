@@ -2,5 +2,5 @@
   "schema": 1,
   "name": "fuzzyfind",
   "version": "0.1.0",
-  "description": "Unicode subsequence ranking for quick-open"
+  "description": "Quick-open subsequence ranking"
 }

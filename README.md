@@ -1,4 +1,4 @@
-# Unicode subsequence ranking for quick-open
+# Quick-open subsequence ranking
 
 Source-only matching for an IDE's command palette, quick-open list or symbol picker.
 It scores ordered subsequences, returns the best alignment's highlight positions,
